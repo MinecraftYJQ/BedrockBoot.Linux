@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="BedrockBoot.Linux.Console/BedrockBoot.Linux.Console.csproj" />
   <Project Path="BedrockBoot.Linux/BedrockBoot.Linux.csproj" />
 </Solution>
