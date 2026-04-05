@@ -8,6 +8,7 @@
 
     <ItemGroup>
       <PackageReference Include="Octokit" Version="14.0.0" />
+      <PackageReference Include="Spectre.Console" Version="0.55.1-alpha.0.5" />
     </ItemGroup>
 
 </Project>

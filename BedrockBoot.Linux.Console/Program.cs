@@ -1,7 +1,9 @@
 ﻿using BedrockBoot.Linux.Entry.Progress;
 using BedrockBoot.Linux.Models.Game;
 using BedrockBoot.Linux.Models.Global;
+using BedrockBoot.Linux.Models.Pack.Game.Instance;
 using BedrockBoot.Linux.Models.Proton;
+using Spectre.Console;
 
 class Program
 {
@@ -105,5 +107,36 @@ class Program
 
     private static void InstallGame(string v) => Console.WriteLine($"正在安装 {v}...");
     private static void ViewAllVersions() => Console.WriteLine("查看版本列表...");
-    private static void ViewInstalledVersions() => Console.WriteLine("查看已安装版本...");
+
+    private static void ViewInstalledVersions()
+    {
+        var games = InstanceHelper.GetVersionConfigs(PathsList.LinuxGamePath);
+
+        if (games == null || !games.Any())
+        {
+            AnsiConsole.MarkupLine("未找到已安装的版本。");
+            return;
+        }
+
+        var table = new Table();
+        table.AddColumn("ID");
+        table.AddColumn("名称");
+        table.AddColumn("版本");
+        table.AddColumn("路径");
+        table.Border = TableBorder.Rounded;
+
+        int id = 1;
+        foreach (var game in games)
+        {
+            table.AddRow(
+                id.ToString(),
+                game.Info?.VersionName ?? "未知",
+                game.Info?.Version ?? "未知",
+                game.VersionPath
+            );
+            id++;
+        }
+
+        AnsiConsole.Write(table);
+    }
 }

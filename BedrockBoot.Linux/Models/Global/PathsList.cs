@@ -7,4 +7,5 @@ public class PathsList
             "BedrockBoot2");
     
     public static readonly string ProtonPath = Path.Combine(RootConfigPath, "BedrockBoot.Proton");
+    public static readonly string LinuxGamePath = Path.Combine(RootConfigPath, "BedrockBoot.LinuxGame");
 }
