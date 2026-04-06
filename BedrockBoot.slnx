@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/App/">
+    <Project Path="src/BedrockBoot.Desktop/BedrockBoot.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/Core/" />
+  <Folder Name="/Core/BedrockLauncher.Core.Linux/">
+    <Project Path="src/BedrockLauncher.Core.Linux/BedrockLauncher.Core.Linux/BedrockLauncher.Core.Linux.csproj" />
+  </Folder>
+  <Folder Name="/Linux/">
+    <Project Path="src/BedrockBoot.Linux.Console/BedrockBoot.Linux.Console.csproj" />
+    <Project Path="src/BedrockBoot.Linux/BedrockBoot.Linux.csproj" />
+  </Folder>
+  <Project Path="src/BedrockBoot/BedrockBoot.csproj" />
+</Solution>

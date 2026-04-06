@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="BedrockLauncher.Core.Linux/BedrockLauncher.Core.Linux.csproj" />
+  <Project Path="CoreTest/CoreTest.csproj" />
+</Solution>
