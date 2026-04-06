@@ -1,6 +1,0 @@
-#!/bin/bash
-set -e
-if [ -f /usr/local/bin/BedrockBoot.Linux ] && [ ! -L /usr/local/bin/bbl ]; then
-    ln -sf /usr/local/bin/BedrockBoot.Linux /usr/local/bin/bbl
-fi
-exit 0
