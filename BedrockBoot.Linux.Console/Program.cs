@@ -26,21 +26,25 @@ class Program
 
             switch (arg)
             {
-                case "-launch":
-                case "--l":
+                case "help":
+                case "h":
+                    PrintHelp();
+                    break;
+                case "launch":
+                case "l":
                     if (i + 1 < args.Length)
                     {
                         string gameFolder = args[++i];
-                        await Task.Run(() => LaunchGame(gameFolder));
+                        await LaunchGameFlow(gameFolder);
                     }
                     else
                     {
-                        Console.WriteLine("错误: -launch 需要指定游戏目录。");
+                        AnsiConsole.MarkupLine("[red]错误:[/] launch 需要指定游戏目录。");
                     }
                     break;
 
-                case "-install":
-                case "--i":
+                case "install":
+                case "i":
                     if (i + 1 < args.Length)
                     {
                         string version = args[++i];
@@ -48,95 +52,144 @@ class Program
                     }
                     break;
 
-                case "-install-list":
+                case "install-list":
                     ViewAllVersions();
                     break;
 
-                case "-game-list":
+                case "game-list":
                     ViewInstalledVersions();
                     break;
 
                 default:
-                    Console.WriteLine($"未知指令: {arg}");
+                    AnsiConsole.MarkupLine($"[yellow]未知指令:[/] {arg}");
                     PrintHelp();
                     break;
             }
         }
     }
 
-    static void LaunchGame(string gameFolder)
+    // 封装启动流，确保逻辑顺序不变
+    static async Task LaunchGameFlow(string gameFolder)
     {
         string protonWorkPath = Path.Combine(PathsList.ProtonPath, "work");
         string protonBinPath = Path.Combine(protonWorkPath, "GDK-Proton10-32");
 
+        // 原本的检测逻辑：如果不存在则下载
         if (!Directory.Exists(protonBinPath))
         {
-            Console.WriteLine("Proton 环境缺失，正在开始下载...");
-            DownloadAndExtractProton().Wait(); 
+            AnsiConsole.MarkupLine("[yellow]Proton 环境缺失，开始准备环境...[/]");
+            await DownloadProtonWithBottomBar();
         }
 
-        var launch = new EasyLaunch(new()
-        {
-            GamePath = Path.Combine(gameFolder, "Minecraft.Windows.exe"),
-            PrefixPath = Path.Combine(protonWorkPath, "game_prefix"),
-            ProtonPath = Path.Combine(protonWorkPath, ProtonDownloader.ProtonVersion)
-        });
-
-        launch.Launch(); 
+        // 启动逻辑
+        await LaunchWithBottomBar(gameFolder, protonWorkPath);
     }
 
-    static async Task DownloadAndExtractProton()
+    // 1. 下载部分：原本逻辑不变，仅更换进度条表现
+    static async Task DownloadProtonWithBottomBar()
     {
         var downloader = new ProtonDownloader();
-        await downloader.Download(new Progress<DownloadProgress>(s =>
-        {
-            Console.Write($"\r下载进度: {s.ProgressPercentage:F2} %");
-        }));
-        Console.WriteLine("\n环境准备就绪。");
+
+        await AnsiConsole.Progress()
+            .Columns(new ProgressColumn[] 
+            {
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn(),
+                new SpinnerColumn(),
+            })
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("[cyan]正在下载 Proton 组件[/]");
+                
+                // 依然使用原本的 Progress<T> 逻辑
+                var progress = new Progress<DownloadProgress>(s =>
+                {
+                    task.Value = s.ProgressPercentage;
+                });
+
+                await downloader.Download(progress);
+            });
+        
+        AnsiConsole.MarkupLine("[green]环境下载并解压完成。[/]");
+    }
+
+    // 2. 启动部分：加上底部进度感官
+    static async Task LaunchWithBottomBar(string gameFolder, string protonWorkPath)
+    {
+        await AnsiConsole.Progress()
+            .Columns(new ProgressColumn[] 
+            {
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new SpinnerColumn(),
+            })
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("[green]正在启动游戏进程...[/]");
+                task.IsIndeterminate = true; // 类似 apt 加载时的往返滚动效果
+
+                // 原本的启动逻辑
+                var launch = new EasyLaunch(new()
+                {
+                    GamePath = Path.Combine(gameFolder, "Minecraft.Windows.exe"),
+                    PrefixPath = Path.Combine(protonWorkPath, "game_prefix"),
+                    ProtonPath = Path.Combine(protonWorkPath, ProtonDownloader.ProtonVersion)
+                });
+
+                // 在进度条上方输出原本的文本
+                AnsiConsole.MarkupLine($"[grey]GamePath:[/] {gameFolder}");
+                
+                // 执行原本的 Launch
+                await Task.Run(() => launch.Launch());
+                
+                task.Value = 100;
+                task.StopTask();
+            });
+            
+        AnsiConsole.MarkupLine("[bold blue]游戏已拉起。[/]");
     }
 
     private static void PrintHelp()
     {
-        Console.WriteLine("\n--- 可用参数 ---");
-        Console.WriteLine("-launch --l <folder>     启动游戏");
-        Console.WriteLine("-install --i <version>   安装游戏");
-        Console.WriteLine("-install-list            查看所有版本");
-        Console.WriteLine("-game-list               查看已安装的版本");
-        Console.WriteLine("----------------\n");
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("命令");
+        table.AddColumn("参数");
+        table.AddColumn("说明");
+        table.AddRow("launch / l", "<folder>", "启动游戏");
+        table.AddRow("install / i", "<version>", "安装游戏");
+        table.AddRow("game-list", "", "已安装列表");
+        table.AddRow("install-list", "<option>", "下载列表 (默认全显示)");
+        table.AddRow("", "release", "所有正式版");
+        table.AddRow("", "preview", "所有预览版");
+        table.AddRow("", "search <key>", "搜索指定关键词的版本");
+        AnsiConsole.Write(table);
     }
 
-    private static void InstallGame(string v) => Console.WriteLine($"正在安装 {v}...");
-    private static void ViewAllVersions() => Console.WriteLine("查看版本列表...");
+    private static void InstallGame(string v) => AnsiConsole.MarkupLine($"正在安装 [green]{v}[/]...");
+    private static void ViewAllVersions() => AnsiConsole.MarkupLine("获取版本列表中...");
 
     private static void ViewInstalledVersions()
     {
         var games = InstanceHelper.GetVersionConfigs(PathsList.LinuxGamePath);
-
         if (games == null || !games.Any())
         {
-            AnsiConsole.MarkupLine("未找到已安装的版本。");
+            AnsiConsole.MarkupLine("[red]未找到已安装的版本。[/]");
             return;
         }
 
-        var table = new Table();
+        var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("ID");
         table.AddColumn("名称");
         table.AddColumn("版本");
         table.AddColumn("路径");
-        table.Border = TableBorder.Rounded;
 
         int id = 1;
         foreach (var game in games)
         {
-            table.AddRow(
-                id.ToString(),
-                game.Info?.VersionName ?? "未知",
-                game.Info?.Version ?? "未知",
-                game.VersionPath
-            );
+            table.AddRow(id.ToString(), game.Info?.VersionName ?? "未知", game.Info?.Version ?? "未知", game.VersionPath);
             id++;
         }
-
         AnsiConsole.Write(table);
     }
 }

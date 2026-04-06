@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.Net.Http.Headers;
 using BedrockBoot.Linux.Entry.Progress;
+using Spectre.Console;
 
 namespace BedrockBoot.Linux.Models.Downloader;
 
@@ -70,7 +71,7 @@ public class MultiThreadDownloader : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($@"HEAD 请求失败: {ex.Message}");
+            AnsiConsole.MarkupLine($@"HEAD 请求失败: {ex.Message}");
         }
 
         try
@@ -89,7 +90,7 @@ public class MultiThreadDownloader : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($@"带 Range 的 GET 请求失败: {ex.Message}");
+            AnsiConsole.MarkupLine($@"带 Range 的 GET 请求失败: {ex.Message}");
         }
 
         try
@@ -105,7 +106,7 @@ public class MultiThreadDownloader : IDisposable
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($@"完整 GET 请求失败: {ex.Message}");
+            AnsiConsole.MarkupLine($@"完整 GET 请求失败: {ex.Message}");
         }
 
         return (-1, false);
@@ -146,26 +147,26 @@ public class MultiThreadDownloader : IDisposable
 
             if (fileSize > 0 && supportsRange)
             {
-                Debug.WriteLine($@"服务器支持断点续传且文件大小已知 ({fileSize} bytes)，使用多线程下载...");
+                AnsiConsole.MarkupLine($@"服务器支持断点续传且文件大小已知 ({fileSize} bytes)，使用多线程下载...");
                 await DownloadMultiPartAsync(uri, filePath, fileSize, progress, cancellationToken);
             }
             else if (fileSize > 0 && !supportsRange)
             {
-                Debug.WriteLine($@"文件大小已知 ({fileSize} bytes) 但服务器不支持断点续传，使用单线程下载...");
+                AnsiConsole.MarkupLine($@"文件大小已知 ({fileSize} bytes) 但服务器不支持断点续传，使用单线程下载...");
                 await DownloadSinglePartAsync(uri, filePath, fileSize, progress, cancellationToken);
             }
             else
             {
-                Debug.WriteLine(@"无法获取文件大小或服务器不支持必要的功能，使用流式单线程下载 (无法显示进度百分比)...");
+                AnsiConsole.MarkupLine(@"无法获取文件大小或服务器不支持必要的功能，使用流式单线程下载 (无法显示进度百分比)...");
                 await DownloadAsStreamAsync(uri, filePath, progress, cancellationToken);
             }
 
-            Debug.WriteLine($@"文件已成功下载并保存到: {filePath}");
+            AnsiConsole.MarkupLine($@"文件已成功下载并保存到: {filePath}");
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            Debug.WriteLine(@"下载已被取消");
+            AnsiConsole.MarkupLine(@"下载已被取消");
             return false;
         }
         catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException ||
@@ -187,7 +188,7 @@ public class MultiThreadDownloader : IDisposable
         IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
     {
         var actualParts = _maxConcurrency;
-        Debug.WriteLine($@"使用 {actualParts} 个分段进行下载 (文件大小: {fileSize} bytes)");
+        AnsiConsole.MarkupLine($@"使用 {actualParts} 个分段进行下载 (文件大小: {fileSize} bytes)");
 
         // 创建临时文件
         var tempDir = Path.GetTempPath();
@@ -256,13 +257,13 @@ public class MultiThreadDownloader : IDisposable
             }
 
             // 合并临时文件
-            Debug.WriteLine(@"开始合并临时文件...");
+            AnsiConsole.MarkupLine(@"开始合并临时文件...");
             await MergeTempFilesAsync(tempFiles, filePath, cancellationToken);
 
             // 报告最终进度
             progressManager.ReportFinalProgress();
 
-            Debug.WriteLine(@"文件合并完成");
+            AnsiConsole.MarkupLine(@"文件合并完成");
         }
         catch (Exception)
         {
@@ -292,7 +293,7 @@ public class MultiThreadDownloader : IDisposable
             }
             catch (Exception ex) when (retry < maxRetries)
             {
-                Debug.WriteLine($@"分段 {partIndex} 下载失败，第 {retry + 1} 次重试: {ex.Message}");
+                AnsiConsole.MarkupLine($@"分段 {partIndex} 下载失败，第 {retry + 1} 次重试: {ex.Message}");
 
                 // 从进度管理中减去已下载的部分
                 progressManager.SubtractDownloaded(downloadInfo.Downloaded);
@@ -364,11 +365,11 @@ public class MultiThreadDownloader : IDisposable
                 lastSpeedCheckTime = now;
 
                 if (speed < 1024 && partDownloaded < (end - start + 1) * 0.9)
-                    Debug.WriteLine($@"分段 {partIndex} 下载速度较慢: {speed:F2} B/s");
+                    AnsiConsole.MarkupLine($@"分段 {partIndex} 下载速度较慢: {speed:F2} B/s");
             }
         }
 
-        Debug.WriteLine($@"分段 {partIndex} 下载完成: {partDownloaded} bytes, 耗时: {stopwatch.Elapsed.TotalSeconds:F2}s");
+        AnsiConsole.MarkupLine($@"分段 {partIndex} 下载完成: {partDownloaded} bytes, 耗时: {stopwatch.Elapsed.TotalSeconds:F2}s");
     }
 
     private async Task MonitorDownloadProgress(PartDownloadInfo[] downloadInfos, CancellationToken cancellationToken)
@@ -387,9 +388,9 @@ public class MultiThreadDownloader : IDisposable
 
                 if (stalledParts.Any())
                 {
-                    Debug.WriteLine($@"警告: 检测到 {stalledParts.Count} 个分段下载停滞:");
+                    AnsiConsole.MarkupLine($@"警告: 检测到 {stalledParts.Count} 个分段下载停滞:");
                     foreach (var info in stalledParts)
-                        Debug.WriteLine(
+                        AnsiConsole.MarkupLine(
                             $@"  分段 {info.PartIndex}: 已下载 {info.Downloaded}/{info.End - info.Start + 1} bytes, 最后活动: {info.LastActivity:HH:mm:ss}");
                 }
             }
@@ -399,7 +400,7 @@ public class MultiThreadDownloader : IDisposable
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($@"监控任务出错: {ex.Message}");
+                AnsiConsole.MarkupLine($@"监控任务出错: {ex.Message}");
             }
     }
 
@@ -448,7 +449,7 @@ public class MultiThreadDownloader : IDisposable
         for (var i = 0; i < result.Count; i++)
         {
             var (start, end) = result[i];
-            Debug.WriteLine($@"分段 {i}: {start}-{end}, 大小: {end - start + 1} bytes");
+            AnsiConsole.MarkupLine($@"分段 {i}: {start}-{end}, 大小: {end - start + 1} bytes");
         }
 
         return result;
@@ -468,7 +469,7 @@ public class MultiThreadDownloader : IDisposable
             }
             catch (Exception ex) when (retry < maxRetries)
             {
-                Debug.WriteLine($@"分段 {partIndex} 下载失败，第 {retry + 1} 次重试: {ex.Message}");
+                AnsiConsole.MarkupLine($@"分段 {partIndex} 下载失败，第 {retry + 1} 次重试: {ex.Message}");
 
                 // 重置下载信息
                 downloadInfo.Downloaded = 0;
@@ -537,14 +538,14 @@ public class MultiThreadDownloader : IDisposable
                 lastSpeedCheckTime = now;
 
                 if (speed < 1024 && partDownloaded < (end - start + 1) * 0.9)
-                    Debug.WriteLine($@"分段 {partIndex} 下载速度较慢: {speed:F2} B/s");
+                    AnsiConsole.MarkupLine($@"分段 {partIndex} 下载速度较慢: {speed:F2} B/s");
             }
 
             // 报告进度
             reportProgress(false);
         }
 
-        Debug.WriteLine($@"分段 {partIndex} 下载完成: {partDownloaded} bytes, 耗时: {stopwatch.Elapsed.TotalSeconds:F2}s");
+        AnsiConsole.MarkupLine($@"分段 {partIndex} 下载完成: {partDownloaded} bytes, 耗时: {stopwatch.Elapsed.TotalSeconds:F2}s");
     }
 
     private HttpClient CreatePartHttpClient()
@@ -673,7 +674,7 @@ public class MultiThreadDownloader : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            Debug.WriteLine($@"正在合并文件: {fileInfo.FullName}, 大小: {fileInfo.Length} bytes");
+            AnsiConsole.MarkupLine($@"正在合并文件: {fileInfo.FullName}, 大小: {fileInfo.Length} bytes");
 
             using var inputStream = new BufferedStream(
                 new FileStream(fileInfo.FullName, FileMode.Open,
@@ -702,7 +703,7 @@ public class MultiThreadDownloader : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($@"删除临时文件失败 {tempFile}: {ex.Message}");
+                    AnsiConsole.MarkupLine($@"删除临时文件失败 {tempFile}: {ex.Message}");
                 }
     }
 
@@ -780,7 +781,7 @@ public class MultiThreadDownloader : IDisposable
                         if (_totalBytes > 0)
                         {
                             var percentage = (double)downloaded / _totalBytes * 100;
-                            Debug.WriteLine($@"进度: {downloaded}/{_totalBytes} bytes ({percentage:F2}%)");
+                            AnsiConsole.MarkupLine($@"进度: {downloaded}/{_totalBytes} bytes ({percentage:F2}%)");
                         }
                     }
                 }

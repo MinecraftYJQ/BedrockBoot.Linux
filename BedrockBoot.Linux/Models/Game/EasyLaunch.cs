@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using BedrockBoot.Linux.Entry;
+using Spectre.Console;
 
 namespace BedrockBoot.Linux.Models.Game;
 
@@ -14,7 +15,8 @@ public class EasyLaunch
 
     public void Launch()
     {
-        if (!Directory.Exists(_launchInfo.PrefixPath)) Directory.CreateDirectory(_launchInfo.PrefixPath);
+        if (!Directory.Exists(_launchInfo.PrefixPath)) 
+            Directory.CreateDirectory(_launchInfo.PrefixPath);
 
         string protonScript = Path.Combine(_launchInfo.ProtonPath, "proton");
         
@@ -23,9 +25,12 @@ public class EasyLaunch
             FileName = protonScript,
             Arguments = $"run \"{_launchInfo.GamePath}\"",
             UseShellExecute = false,
-            CreateNoWindow = false
+            CreateNoWindow = true,           // 接管输出通常不需要弹出原生窗口
+            RedirectStandardOutput = true,   // 重定向标准输出
+            RedirectStandardError = true,    // 重定向错误输出
         };
 
+        // 注入 Proton 所需的环境变量
         startInfo.EnvironmentVariables["STEAM_COMPAT_DATA_PATH"] = _launchInfo.PrefixPath;
         startInfo.EnvironmentVariables["STEAM_COMPAT_CLIENT_INSTALL_PATH"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local/share/Steam");
         
@@ -34,15 +39,42 @@ public class EasyLaunch
         startInfo.EnvironmentVariables["LD_LIBRARY_PATH"] = $"{libPath}:{currentLdPath}";
         startInfo.EnvironmentVariables["WINEDLLOVERRIDES"] = "dxgi,d3d11,d3d10core,d3d9=b";
 
-        Console.WriteLine("Launching Game...");
         try
         {
-            using var process = Process.Start(startInfo);
-            process?.WaitForExit();
+            using var process = new Process();
+            process.StartInfo = startInfo;
+
+            // 标准输出回调：使用 Text 对象避开 Markup 解析陷阱
+            process.OutputDataReceived += (sender, e) =>
+            {
+                if (e.Data != null)
+                {
+                    AnsiConsole.Write(new Text($"[Out] ", new Style(Color.Grey)));
+                    AnsiConsole.WriteLine(e.Data);
+                }
+            };
+
+            // 错误输出回调
+            process.ErrorDataReceived += (sender, e) =>
+            {
+                if (e.Data != null)
+                {
+                    AnsiConsole.Write(new Text($"[Err] ", new Style(Color.Red)));
+                    AnsiConsole.WriteLine(e.Data);
+                }
+            };
+
+            process.Start();
+
+            // 开启异步读取流
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            process.WaitForExit();
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Launching Game failed: {ex.Message}");
+            AnsiConsole.MarkupLine($"[bold red]FATAL:[/] Launching Game failed: {Markup.Escape(ex.Message)}");
         }
     }
 }

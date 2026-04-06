@@ -10,26 +10,58 @@ public class ProtonDownloader
 {
     public ProtonDownloader() { }
     public static string ProtonVersion = "GDK-Proton10-32";
+
     public async Task Download(IProgress<DownloadProgress> progress, CancellationToken ct = default)
     {
+        // 1. 修正异步获取逻辑，避免使用 .Result
         var client = new GitHubClient(new ProductHeaderValue("BedrockBoot.Linux"));
-        var latest = client.Repository.Release.GetAll("Weather-OS", "GDK-Proton").Result.ToList()
-            .Find(x => x.Name == ProtonVersion);
+        var releases = await client.Repository.Release.GetAll("Weather-OS", "GDK-Proton");
+        var latest = releases.FirstOrDefault(x => x.Name == ProtonVersion);
 
-        var fileName = Path.Combine(PathsList.ProtonPath, "download",$"{ProtonVersion}.tar.gz");
+        if (latest == null)
+            throw new Exception($"未找到版本: {ProtonVersion}");
+
+        var downloadDir = Path.Combine(PathsList.ProtonPath, "download");
         var workDir = Path.Combine(PathsList.ProtonPath, "work");
+        var fileName = Path.Combine(downloadDir, $"{ProtonVersion}.tar.gz");
+
+        // 2. 确保必要的目录都已存在
+        Directory.CreateDirectory(downloadDir);
+        Directory.CreateDirectory(workDir);
+
+        // 3. 执行下载
         var downloader = new GithubFilesDownloader();
-        await downloader.DownloadAsync(latest!.Assets[0].BrowserDownloadUrl, fileName, progress, ct);
-        
+        await downloader.DownloadAsync(latest.Assets[0].BrowserDownloadUrl, fileName, progress, ct);
+
+        // 4. 使用更加健壮的 Process 启动方式 (解压)
         var startInfo = new ProcessStartInfo
         {
             FileName = "tar",
-            Arguments = $"-xzf \"{fileName}\" -C \"{workDir}\"",
-            RedirectStandardError = true,
-            UseShellExecute = false
+            RedirectStandardError = true, // 重定向错误流以便排查
+            UseShellExecute = false,
+            CreateNoWindow = true
         };
-            
+
+        // 使用 ArgumentList 自动处理路径中的空格和引号，比直接拼 Arguments 字符串更安全
+        startInfo.ArgumentList.Add("-xzf");
+        startInfo.ArgumentList.Add(fileName);
+        startInfo.ArgumentList.Add("-C");
+        startInfo.ArgumentList.Add(workDir);
+
         using var process = Process.Start(startInfo);
-        await process?.WaitForExitAsync(ct);
+        
+        if (process == null)
+            throw new Exception("无法启动 tar 进程。");
+
+        // 等待解压完成
+        await process.WaitForExitAsync(ct);
+
+        // 5. 检查解压结果
+        if (process.ExitCode != 0)
+        {
+            // 如果报错，读取错误信息
+            string errorOutput = await process.StandardError.ReadToEndAsync(ct);
+            throw new Exception($"解压失败 (ExitCode {process.ExitCode}): {errorOutput}");
+        }
     }
 }
