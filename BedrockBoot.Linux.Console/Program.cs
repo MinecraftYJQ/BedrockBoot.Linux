@@ -1,14 +1,25 @@
-﻿using BedrockBoot.Linux.Entry.Progress;
+﻿using BedrockBoot.Linux.Console.Entry;
+using BedrockBoot.Linux.Entity;
+using BedrockBoot.Linux.Entry.Progress;
 using BedrockBoot.Linux.Models.Game;
 using BedrockBoot.Linux.Models.Global;
+using BedrockBoot.Linux.Models.Helper;
 using BedrockBoot.Linux.Models.Pack.Game.Instance;
 using BedrockBoot.Linux.Models.Proton;
 using Spectre.Console;
 
 class Program
 {
+    public static ConfigEntity<ConfigEntry> Config { get; set; }
     static async Task Main(string[] args)
     {
+        Config = new ConfigEntity<ConfigEntry>(PathsList.ConfigPath);
+        if (!LinuxDisplayServerDetector.IsX11() && 
+            Config.Data.EnableX11Detector)
+        {
+            Console.WriteLine("当前系统可能正在使用非 X11 的图形窗口渲染系统，可能会导致游戏卡顿甚至系统卡顿。");
+            Console.WriteLine("请考虑切换至 X11 图形窗口渲染系统。如不想再次看到此消息，请运行 bbl enable-x11-detector false");
+        }
         await ArgsAnalysis(args);
     }
 
@@ -26,6 +37,18 @@ class Program
 
             switch (arg)
             {
+                case "enable-x11-detector":
+                    string enableStr = args[++i];
+                    if (bool.TryParse(enableStr, out bool enable))
+                    {
+                        Config.Data.EnableX11Detector = enable;
+                        Console.WriteLine($"X11 检测启用状态：{enable}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"无效字符串：{enableStr}");
+                    }
+                    break;
                 case "help":
                 case "h":
                     PrintHelp();
@@ -156,6 +179,7 @@ class Program
         table.AddColumn("命令");
         table.AddColumn("参数");
         table.AddColumn("说明");
+        table.AddRow("help / h", "", "显示帮助");
         table.AddRow("launch / l", "<folder>", "启动游戏");
         table.AddRow("install / i", "<version>", "安装游戏");
         table.AddRow("game-list", "", "已安装列表");
@@ -163,6 +187,8 @@ class Program
         table.AddRow("", "release", "所有正式版");
         table.AddRow("", "preview", "所有预览版");
         table.AddRow("", "search <key>", "搜索指定关键词的版本");
+        table.AddRow("enable-x11-detector", "<bool>", "设置是否启用 X11 检测");
+        table.AddRow("", "false/true", "");
         AnsiConsole.Write(table);
     }
 

@@ -1,0 +1,9 @@
+Package: bedrockboot-linux
+Version: 2.26.0.20260406095239
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: BedrockBoot Team <support@bedrockboot.com>
+Description: BedrockBoot Linux Client
+ Installed-Size: 74325
+ Depends: libc6 (>= 2.35), libgcc-s1 (>= 12), libstdc++6 (>= 12)

@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+[ -L /usr/local/bin/bbl ] && rm -f /usr/local/bin/bbl
+exit 0
