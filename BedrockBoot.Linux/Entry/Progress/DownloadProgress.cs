@@ -9,6 +9,6 @@ public class DownloadProgress
         ? Math.Min(100, Math.Round((double)DownloadedBytes / TotalBytes * 100, 2))
         : 0;
 
-    public double BytesPerSecond { get; set; }
+    public long BytesPerSecond { get; set; }
     public double EstimatedRemainingSeconds { get; set; }
 }
