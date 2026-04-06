@@ -37,7 +37,7 @@ check_dependencies() {
     print_step "检查构建依赖..."
     for cmd in dotnet dpkg-deb fakeroot; do
         if ! command -v $cmd &> /dev/null; then
-            print_error "缺少依赖: $cmd (请运行: sudo apt install dotnet-sdk-8.0 dpkg-dev fakeroot)"
+            print_error "缺少依赖: $cmd (请运行: sudo apt install dotnet-sdk-10.0 dpkg-dev fakeroot)"
             exit 1
         fi
     done
