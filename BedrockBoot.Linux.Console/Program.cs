@@ -1,4 +1,5 @@
 ﻿using BedrockBoot.Linux.Console.Entry;
+using BedrockBoot.Linux.Console.Global;
 using BedrockBoot.Linux.Entity;
 using BedrockBoot.Linux.Entry.Progress;
 using BedrockBoot.Linux.Models.Game;
@@ -6,6 +7,8 @@ using BedrockBoot.Linux.Models.Global;
 using BedrockBoot.Linux.Models.Helper;
 using BedrockBoot.Linux.Models.Pack.Game.Instance;
 using BedrockBoot.Linux.Models.Proton;
+using BedrockLauncher.Core.Linux;
+using BedrockLauncher.Core.VersionJsons;
 using Spectre.Console;
 
 class Program
@@ -14,6 +17,7 @@ class Program
     static async Task Main(string[] args)
     {
         Config = new ConfigEntity<ConfigEntry>(PathsList.ConfigPath);
+        GlobalModel.BedrockCore = new BedrockCore();
         if (!LinuxDisplayServerDetector.IsX11() && 
             Config.Data.EnableX11Detector)
         {
@@ -38,21 +42,30 @@ class Program
             switch (arg)
             {
                 case "enable-x11-detector":
-                    string enableStr = args[++i];
-                    if (bool.TryParse(enableStr, out bool enable))
+                    if (i + 1 < args.Length)
                     {
-                        Config.Data.EnableX11Detector = enable;
-                        Console.WriteLine($"X11 检测启用状态：{enable}");
+                        string enableStr = args[++i];
+                        if (bool.TryParse(enableStr, out bool enable))
+                        {
+                            Config.Data.EnableX11Detector = enable;
+                            Console.WriteLine($"X11 检测启用状态：{enable}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"无效字符串：{enableStr}");
+                        }
                     }
                     else
                     {
-                        Console.WriteLine($"无效字符串：{enableStr}");
+                        AnsiConsole.MarkupLine("[red]错误:[/] enable-x11-detector 需要指定 true/false");
                     }
                     break;
+
                 case "help":
                 case "h":
                     PrintHelp();
                     break;
+
                 case "launch":
                 case "l":
                     if (i + 1 < args.Length)
@@ -71,12 +84,23 @@ class Program
                     if (i + 1 < args.Length)
                     {
                         string version = args[++i];
-                        InstallGame(version);
+                        await InstallGame(version);
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine("[red]错误:[/] install 需要指定版本号。");
                     }
                     break;
 
                 case "install-list":
-                    ViewAllVersions();
+                    // 处理 install-list，如果有参数则作为搜索关键词
+                    string searchKey = "";
+                    if (i + 1 < args.Length)
+                    {
+                        searchKey = args[i + 1];
+                        i++; // 消耗掉关键词参数
+                    }
+                    await ViewAllVersions(searchKey);
                     break;
 
                 case "game-list":
@@ -183,17 +207,97 @@ class Program
         table.AddRow("launch / l", "<folder>", "启动游戏");
         table.AddRow("install / i", "<version>", "安装游戏");
         table.AddRow("game-list", "", "已安装列表");
-        table.AddRow("install-list", "<option>", "下载列表 (默认全显示)");
-        table.AddRow("", "release", "所有正式版");
-        table.AddRow("", "preview", "所有预览版");
-        table.AddRow("", "search <key>", "搜索指定关键词的版本");
+        table.AddRow("install-list", "", "显示所有可用版本");
+        table.AddRow("install-list", "<关键词>", "搜索包含关键词的版本");
         table.AddRow("enable-x11-detector", "<bool>", "设置是否启用 X11 检测");
-        table.AddRow("", "false/true", "");
         AnsiConsole.Write(table);
     }
 
-    private static void InstallGame(string v) => AnsiConsole.MarkupLine($"正在安装 [green]{v}[/]...");
-    private static void ViewAllVersions() => AnsiConsole.MarkupLine("获取版本列表中...");
+    private static async Task InstallGame(string version)
+    {
+        // 实现安装逻辑
+        AnsiConsole.MarkupLine($"正在安装 [green]{version}[/]...");
+        // TODO: 实现具体的安装逻辑
+        await Task.CompletedTask;
+    }
+
+    private static async Task ViewAllVersions(string searchKey = "")
+    {
+        // 显示加载状态
+        await AnsiConsole.Status()
+            .StartAsync("正在获取版本列表...", async ctx =>
+            {
+                // 获取版本数据
+                var database = await VersionsHelper.GetBuildDatabaseAsync("https://data.mcappx.com/v2/bedrock.json");
+                if (database == null)
+                {
+                    AnsiConsole.MarkupLine("[red]错误:[/] 无法获取版本数据库。");
+                    return;
+                }
+                
+                var versions = database.Builds;
+                
+                // 处理版本列表
+                var gdkVersions = versions
+                    .Where(v => v.Value.BuildType == MinecraftBuildTypeVersion.GDK)
+                    .Select(v => v.Value)
+                    .ToListAsync().Result;
+                
+                // 按搜索关键词过滤
+                if (!string.IsNullOrEmpty(searchKey))
+                {
+                    gdkVersions = gdkVersions
+                        .Where(v => v.ID.Contains(searchKey, StringComparison.OrdinalIgnoreCase) ||
+                                    v.Type.ToString().Contains(searchKey, StringComparison.OrdinalIgnoreCase) ||
+                                    v.Date.Contains(searchKey, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                }
+                
+                // 显示结果
+                if (!gdkVersions.Any())
+                {
+                    if (!string.IsNullOrEmpty(searchKey))
+                    {
+                        AnsiConsole.MarkupLine($"[yellow]未找到包含关键词 '{searchKey}' 的版本。[/]");
+                    }
+                    else
+                    {
+                        AnsiConsole.MarkupLine("[yellow]未找到任何版本。[/]");
+                    }
+                    return;
+                }
+                
+                // 创建表格
+                var table = new Table().Border(TableBorder.Rounded);
+                table.AddColumn("ID");
+                table.AddColumn("类型");
+                table.AddColumn("发布日期");
+                
+                // 设置表格标题
+                if (!string.IsNullOrEmpty(searchKey))
+                {
+                    table.Caption = new TableTitle($"搜索结果: '{searchKey}' ({gdkVersions.Count} 个匹配)");
+                }
+                else
+                {
+                    table.Caption = new TableTitle($"所有版本 ({gdkVersions.Count} 个)");
+                }
+                
+                // 添加行（倒序显示，最新的在前面）
+                foreach (var v in gdkVersions.OrderByDescending(v => v.Date))
+                {
+                    // 根据类型设置颜色
+                    string typeColor = v.Type == MinecraftGameTypeVersion.Release ? "green" : "yellow";
+                    table.AddRow(
+                        v.ID, 
+                        $"[{typeColor}]{v.Type}[/]", 
+                        v.Date
+                    );
+                }
+                
+                AnsiConsole.Write(table);
+            });
+    }
 
     private static void ViewInstalledVersions()
     {

@@ -18,6 +18,7 @@
 
     <ItemGroup>
       <ProjectReference Include="..\BedrockBoot.Linux\BedrockBoot.Linux.csproj" />
+      <ProjectReference Include="..\BedrockLauncher.Core.Linux\BedrockLauncher.Core.Linux\BedrockLauncher.Core.Linux.csproj" />
     </ItemGroup>
 
     <ItemGroup>
